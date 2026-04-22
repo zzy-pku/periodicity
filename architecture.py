@@ -10,6 +10,13 @@ model_registry = {}
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 from torch.utils.cpp_extension import load
 
+
+def load_pretrained_model(model_name):
+    try:
+        return AutoModel.from_pretrained(model_name, local_files_only=True)
+    except Exception:
+        return AutoModel.from_pretrained(model_name)
+
 # Create a decorator to register models
 def register_model(model_name):
     def decorator(cls):
@@ -195,7 +202,7 @@ class TransformerModel(nn.Module):
         super().__init__()
 
         # 加载预训练模型
-        base_model = AutoModel.from_pretrained(pretrained_name)
+        base_model = load_pretrained_model(pretrained_name)
         # 用预训练 embedding
         self.embedding = base_model.get_input_embeddings()
         self.hidden_dim = self.embedding.embedding_dim
@@ -391,15 +398,17 @@ class FANformerModel(nn.Module):
 @register_model('Qwen2.5Embedding-FANformer')
 class Qwen_FANformerModel(nn.Module):
     def __init__(self, pretrained_name="/home/gtxygyzb/models/Qwen/Qwen2.5-0.5B", output_dim=1,
-                 num_layers=5, num_heads=12, norm_first=True, dropout=0.1, freeze_emb=True):
+                 num_layers=5, num_heads=12, norm_first=True, dropout=0.1,
+                 freeze_emb=True, causal=True):
         super().__init__()
         # 加载预训练模型
-        base_model = AutoModel.from_pretrained(pretrained_name)
+        base_model = load_pretrained_model(pretrained_name)
 
         # 用预训练 embedding
         self.embedding = base_model.get_input_embeddings()
         self.hidden_dim = self.embedding.embedding_dim
         # 压缩和展开层
+        self.causal = causal
         
         print("hidden_dim:", self.hidden_dim)
 
@@ -428,8 +437,10 @@ class Qwen_FANformerModel(nn.Module):
 
         # print(x)
         # causal mask: shape [seq_len, seq_len]
-        seq_len = x.size(0)
-        attn_mask = torch.triu(torch.ones(seq_len, seq_len, device=x.device), diagonal=1).bool()
+        attn_mask = None
+        if self.causal:
+            seq_len = x.size(0)
+            attn_mask = torch.triu(torch.ones(seq_len, seq_len, device=x.device), diagonal=1).bool()
 
         for layer in self.layers:
             x = layer(x, attn_mask=attn_mask) # (seq_len, batch, hidden)
@@ -481,7 +492,7 @@ class Qwen_Transformer(nn.Module):
                  num_layers=5, num_heads=12, norm_first=True, dropout=0.1, freeze_emb=True):
         super().__init__()
         # 加载预训练模型
-        base_model = AutoModel.from_pretrained(pretrained_name)
+        base_model = load_pretrained_model(pretrained_name)
 
         # 用预训练 embedding
         self.embedding = base_model.get_input_embeddings()
@@ -531,7 +542,7 @@ class OnlyNormNet(nn.Module):
         num_layers=12, num_heads=12, norm_first=True, dropout=0.1, freeze_emb=True):
         super().__init__()
         # 加载预训练模型
-        base_model = AutoModel.from_pretrained(pretrained_name)
+        base_model = load_pretrained_model(pretrained_name)
 
         # 用预训练 embedding
         self.embedding = base_model.get_input_embeddings()
@@ -874,7 +885,7 @@ class Mamba(nn.Module):
         
         factory_kwargs = {"device": device, "dtype": dtype}
 
-        base_model = AutoModel.from_pretrained("Qwen/Qwen2.5-0.5B")
+        base_model = load_pretrained_model("Qwen/Qwen2.5-0.5B")
         
         pre_trained_embedding = base_model.get_input_embeddings()
         d_model = pre_trained_embedding.embedding_dim
@@ -965,7 +976,7 @@ class RWKV(nn.Module):
         from argparse import Namespace
         args = Namespace()
 
-        base_model = AutoModel.from_pretrained("Qwen/Qwen2.5-0.5B")
+        base_model = load_pretrained_model("Qwen/Qwen2.5-0.5B")
         self.emb = base_model.get_input_embeddings()
         args.n_embd = self.emb.embedding_dim
 
@@ -1300,4 +1311,3 @@ class WindBackstepping(torch.autograd.Function):
         torch.ops.wind_backstepping.backward(w,q,k,v,z,b, dy,s,sa, dw,dq,dk,dv,dz,db)
         return dw,dq,dk,dv,dz,db
     
-
