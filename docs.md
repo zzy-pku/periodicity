@@ -176,6 +176,7 @@
 * 交叉熵 loss 曲线
 * 数值 MSE 曲线
 * ID / OOD 上的数值预测散点或曲线图
+* 可选的中间 epoch 预测曲线图，文件名包含 epoch 数
 * 一份最后一个 epoch 的输入、目标、预测、解码结果和误差文件
 
 目标是能够直观看到：
@@ -208,4 +209,4 @@
 * 是否需要扩展为多 seed 和更接近论文图形的完整复现
 
 
-python appendix_h_fanformer_sin.py     --output_dir ./outputs/smoke     --epochs 100     --eval_every 1     --train_size 2000     --id_test_size 400     --ood_test_size 400     --batch_size 32     --layers 2     --num_heads 8
+python appendix_h_fanformer_sin.py     --output_dir ./outputs/smoke     --epochs 100     --eval_every 1     --train_size 2000     --id_test_size 400     --ood_test_size 400     --batch_size 32     --layers 2     --num_heads 8  --id_left -3.141592653589793  --id_right 3.141592653589793  --ood_left -6.283185307179586     --ood_right 6.283185307179586  --plot_every 10

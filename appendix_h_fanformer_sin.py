@@ -87,19 +87,36 @@ def build_samples(points: np.ndarray) -> list[Example]:
     return samples
 
 
-def build_datasets(train_size: int, id_test_size: int, ood_test_size: int) -> tuple[list[Example], list[Example], list[Example]]:
-    train_points = np.linspace(-3 * math.pi, 3 * math.pi, train_size, endpoint=True, dtype=np.float64)
+def validate_ranges(id_left: float, id_right: float, ood_left: float, ood_right: float) -> None:
+    if not ood_left < id_left < id_right < ood_right:
+        raise ValueError(
+            "Expected ordered ranges: ood_left < id_left < id_right < ood_right. "
+            f"Got {ood_left=}, {id_left=}, {id_right=}, {ood_right=}."
+        )
+
+
+def build_datasets(
+    train_size: int,
+    id_test_size: int,
+    ood_test_size: int,
+    id_left: float,
+    id_right: float,
+    ood_left: float,
+    ood_right: float,
+) -> tuple[list[Example], list[Example], list[Example]]:
+    validate_ranges(id_left, id_right, ood_left, ood_right)
+    train_points = np.linspace(id_left, id_right, train_size, endpoint=True, dtype=np.float64)
 
     # Offset the in-distribution grid to avoid exact overlap with training samples.
-    id_step = (6 * math.pi) / id_test_size
-    id_start = -3 * math.pi + 0.5 * id_step
-    id_end = 3 * math.pi - 0.5 * id_step
+    id_step = (id_right - id_left) / id_test_size
+    id_start = id_left + 0.5 * id_step
+    id_end = id_right - 0.5 * id_step
     id_points = np.linspace(id_start, id_end, id_test_size, endpoint=True, dtype=np.float64)
 
     left_size = ood_test_size // 2
     right_size = ood_test_size - left_size
-    left_points = np.linspace(-6 * math.pi, -3 * math.pi, left_size, endpoint=False, dtype=np.float64)
-    right_points = np.linspace(3 * math.pi, 6 * math.pi, right_size, endpoint=True, dtype=np.float64)
+    left_points = np.linspace(ood_left, id_left, left_size, endpoint=False, dtype=np.float64)
+    right_points = np.linspace(id_right, ood_right, right_size, endpoint=True, dtype=np.float64)
     ood_points = np.concatenate([left_points, right_points])
 
     return build_samples(train_points), build_samples(id_points), build_samples(ood_points)
@@ -272,7 +289,16 @@ def plot_mse_curve(history: list[dict], out_path: str) -> None:
     plt.close()
 
 
-def plot_predictions(id_records: list[dict], ood_records: list[dict], out_path: str) -> None:
+def plot_predictions(
+    id_records: list[dict],
+    ood_records: list[dict],
+    out_path: str,
+    id_left: float,
+    id_right: float,
+    ood_left: float,
+    ood_right: float,
+    epoch: int | None = None,
+) -> None:
     import matplotlib.pyplot as plt
 
     all_records = list(id_records) + list(ood_records)
@@ -283,11 +309,6 @@ def plot_predictions(id_records: list[dict], ood_records: list[dict], out_path: 
     xs, ys, pred = xs[order], ys[order], pred[order]
 
     fig, ax = plt.subplots(figsize=(14, 6))
-
-    id_left = -3 * math.pi
-    id_right = 3 * math.pi
-    ood_left = -6 * math.pi
-    ood_right = 6 * math.pi
 
     ax.axvspan(ood_left, id_left, color="#f4d7d7", alpha=0.45, label="OOD range")
     ax.axvspan(id_left, id_right, color="#d9ecff", alpha=0.45, label="ID range")
@@ -307,7 +328,10 @@ def plot_predictions(id_records: list[dict], ood_records: list[dict], out_path: 
     ax.set_ylim(-1.2, 1.2)
     ax.set_xlabel("x")
     ax.set_ylabel("y")
-    ax.set_title("FANformer on Serialized sin(x)")
+    title = "FANformer on Serialized sin(x)"
+    if epoch is not None:
+        title = f"{title} (epoch {epoch})"
+    ax.set_title(title)
     ax.grid(alpha=0.3)
     ax.legend(loc="lower left")
 
@@ -334,16 +358,24 @@ def main() -> None:
     parser.add_argument("--layers", type=int, default=5)
     parser.add_argument("--num_heads", type=int, default=8)
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--train_size", type=int, default=12000)
     parser.add_argument("--id_test_size", type=int, default=2000)
     parser.add_argument("--ood_test_size", type=int, default=2000)
+    parser.add_argument("--id_left", type=float, default=-3 * math.pi)
+    parser.add_argument("--id_right", type=float, default=3 * math.pi)
+    parser.add_argument("--ood_left", type=float, default=-6 * math.pi)
+    parser.add_argument("--ood_right", type=float, default=6 * math.pi)
     parser.add_argument("--eval_every", type=int, default=10)
+    parser.add_argument("--plot_every", type=int, default=0, help="Save prediction curve every N epochs. 0 disables intermediate plots.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
+
+    if args.plot_every < 0:
+        raise ValueError("--plot_every must be >= 0.")
 
     set_seed(args.seed)
     args.output_dir = append_timestamp(args.output_dir)
@@ -358,7 +390,15 @@ def main() -> None:
     index_to_token = {idx: token for idx, token in enumerate(allowed_tokens)}
     position_mask = build_position_mask(index_to_token)
 
-    train_samples, id_samples, ood_samples = build_datasets(args.train_size, args.id_test_size, args.ood_test_size)
+    train_samples, id_samples, ood_samples = build_datasets(
+        args.train_size,
+        args.id_test_size,
+        args.ood_test_size,
+        args.id_left,
+        args.id_right,
+        args.ood_left,
+        args.ood_right,
+    )
     train_dataset = SerializedSinDataset(train_samples, tokenizer, label_to_index)
     id_dataset = SerializedSinDataset(id_samples, tokenizer, label_to_index)
     ood_dataset = SerializedSinDataset(ood_samples, tokenizer, label_to_index)
@@ -373,6 +413,7 @@ def main() -> None:
         output_dim=len(allowed_tokens),
         num_layers=args.layers,
         num_heads=args.num_heads,
+        norm_first=True,
         freeze_emb=True,
         causal=False,
     ).to(args.device)
@@ -411,7 +452,12 @@ def main() -> None:
             train_losses.append(loss.item())
 
         train_loss = float(np.mean(train_losses))
-        if epoch % args.eval_every != 0 and epoch != args.epochs:
+        should_eval = (
+            epoch % args.eval_every == 0
+            or (args.plot_every > 0 and epoch % args.plot_every == 0)
+            or epoch == args.epochs
+        )
+        if not should_eval:
             print(f"Epoch {epoch}: train_loss={train_loss:.6f}")
             continue
 
@@ -438,6 +484,17 @@ def main() -> None:
             "id_metrics": id_metrics,
             "ood_metrics": ood_metrics,
         }
+        if (args.plot_every > 0 and epoch % args.plot_every == 0) or epoch == args.epochs:
+            plot_predictions(
+                id_records,
+                ood_records,
+                os.path.join(args.output_dir, f"prediction_curve_epoch{epoch}.png"),
+                args.id_left,
+                args.id_right,
+                args.ood_left,
+                args.ood_right,
+                epoch=epoch,
+            )
 
     if not history:
         id_loss, id_metrics, id_records = evaluate(model, id_loader, criterion, args.device, index_to_token, position_mask)
@@ -474,7 +531,16 @@ def main() -> None:
     )
     plot_loss_curve(history, os.path.join(args.output_dir, "cross_entropy_loss_curve.png"))
     plot_mse_curve(history, os.path.join(args.output_dir, "mse_curve.png"))
-    plot_predictions(final_payload["id_records"], final_payload["ood_records"], os.path.join(args.output_dir, "prediction_curve.png"))
+    plot_predictions(
+        final_payload["id_records"],
+        final_payload["ood_records"],
+        os.path.join(args.output_dir, "prediction_curve.png"),
+        args.id_left,
+        args.id_right,
+        args.ood_left,
+        args.ood_right,
+        epoch=final_payload["epoch"],
+    )
 
 
 if __name__ == "__main__":
