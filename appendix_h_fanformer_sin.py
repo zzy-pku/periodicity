@@ -352,9 +352,15 @@ def append_timestamp(output_dir: str) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Appendix H: FANformer on serialized sin(x)")
+    parser = argparse.ArgumentParser(description="Appendix H: serialized sin(x) with Qwen2.5Embedding backbones")
     parser.add_argument("--output_dir", type=str, default="./outputs/appendix_h_fanformer_sin")
     parser.add_argument("--pretrained_name", type=str, default="Qwen/Qwen2.5-0.5B")
+    parser.add_argument(
+        "--model_name",
+        type=str,
+        default="Qwen2.5Embedding-FANformer",
+        choices=["Qwen2.5Embedding-FANformer", "Qwen2.5Embedding-Transformer"],
+    )
     parser.add_argument("--layers", type=int, default=5)
     parser.add_argument("--num_heads", type=int, default=8)
     parser.add_argument("--batch_size", type=int, default=64)
@@ -408,7 +414,7 @@ def main() -> None:
     ood_loader = DataLoader(ood_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_batch)
 
     model = get_model_by_name(
-        "Qwen2.5Embedding-FANformer",
+        args.model_name,
         pretrained_name=args.pretrained_name,
         output_dim=len(allowed_tokens),
         num_layers=args.layers,
