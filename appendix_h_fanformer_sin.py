@@ -363,6 +363,12 @@ def main() -> None:
     )
     parser.add_argument("--layers", type=int, default=5)
     parser.add_argument("--num_heads", type=int, default=8)
+    parser.add_argument(
+        "--norm_first",
+        type=lambda x: str(x).lower() in {"1", "true", "yes", "y"},
+        default=True,
+        help="Whether to use pre-norm in Transformer/FANformer blocks.",
+    )
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--lr", type=float, default=1e-5)
@@ -419,7 +425,7 @@ def main() -> None:
         output_dim=len(allowed_tokens),
         num_layers=args.layers,
         num_heads=args.num_heads,
-        norm_first=True,
+        norm_first=args.norm_first,
         freeze_emb=True,
         causal=False,
     ).to(args.device)

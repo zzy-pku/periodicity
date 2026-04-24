@@ -209,7 +209,7 @@
 * 是否需要扩展为多 seed 和更接近论文图形的完整复现
 
 
-python appendix_h_fanformer_sin.py     --output_dir ./outputs/smoke     --epochs 100     --eval_every 1     --train_size 2000     --id_test_size 400     --ood_test_size 400     --batch_size 32     --layers 2     --num_heads 8  --id_left -3.141592653589793  --id_right 3.141592653589793  --ood_left -6.283185307179586     --ood_right 6.283185307179586  --plot_every 10   ----pretrained_name ///   --model_name Qwen2.5Embedding-FANformer
+python appendix_h_fanformer_sin.py     --output_dir ./outputs/smoke     --epochs 100     --eval_every 1     --train_size 2000     --id_test_size 400     --ood_test_size 400     --batch_size 32     --layers 2     --num_heads 8  --id_left -3.141592653589793  --id_right 3.141592653589793  --ood_left -6.283185307179586     --ood_right 6.283185307179586  --plot_every 10   ----pretrained_name ///   --model_name Qwen2.5Embedding-FANformer   --norm_first true
 
 
  python evaluate_serialized_sin_model.py \
