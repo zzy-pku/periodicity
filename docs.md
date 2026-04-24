@@ -224,3 +224,22 @@ python appendix_h_fanformer_sin.py     --output_dir ./outputs/smoke     --epochs
     --logit_probe_left -1.0 \
     --logit_probe_right 1.0 \
     --logit_probe_step 1.0
+
+plot_logit_probe.py \
+    --logit_probe_path /path/to/logit_probe.jsonl \
+    --output_path /path/to/logit_probe_plot.png
+
+
+python analyze_periodicity_generalization.py \
+    --checkpoint_dir outputs/smoke_04-23_15-33-24 \
+    --output_dir ./outputs/periodicity_analysis_run1 \
+    --id_left -9.42477796076938 \
+    --id_right 9.42477796076938 \
+    --ood_left -18.84955592153876 \
+    --ood_right 18.84955592153876 \
+    --interval_width 3.141592653589793 \
+    --points_per_interval 256 \
+    --phase_points 256 \
+    --max_k 6 \
+    --shift_multiples 1,2,3,4 \
+    --full_curve_points 4096
