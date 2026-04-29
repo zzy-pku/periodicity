@@ -345,6 +345,20 @@ def save_json(path: str, payload) -> None:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
 
 
+def load_checkpoint_payload(path: str, map_location=None):
+    try:
+        payload = torch.load(path, map_location=map_location, weights_only=False)
+    except TypeError:
+        payload = torch.load(path, map_location=map_location)
+    return payload
+
+
+def extract_model_state_dict(payload) -> dict:
+    if isinstance(payload, dict) and "model_state_dict" in payload:
+        return payload["model_state_dict"]
+    return payload
+
+
 def append_timestamp(output_dir: str) -> str:
     normalized = output_dir.rstrip("/\\")
     timestamp = datetime.now().strftime("%m-%d_%H-%M-%S")
@@ -382,6 +396,7 @@ def main() -> None:
     parser.add_argument("--ood_right", type=float, default=6 * math.pi)
     parser.add_argument("--eval_every", type=int, default=10)
     parser.add_argument("--plot_every", type=int, default=0, help="Save prediction curve every N epochs. 0 disables intermediate plots.")
+    parser.add_argument("--resume_from", type=str, default=None, help="Path to a saved checkpoint to resume from.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
@@ -390,7 +405,8 @@ def main() -> None:
         raise ValueError("--plot_every must be >= 0.")
 
     set_seed(args.seed)
-    args.output_dir = append_timestamp(args.output_dir)
+    if args.resume_from is None:
+        args.output_dir = append_timestamp(args.output_dir)
     os.makedirs(args.output_dir, exist_ok=True)
 
     tokenizer = load_tokenizer(args.pretrained_name)
@@ -435,6 +451,19 @@ def main() -> None:
 
     history = []
     final_payload = None
+    start_epoch = 1
+
+    if args.resume_from is not None:
+        checkpoint_payload = load_checkpoint_payload(args.resume_from, map_location=args.device)
+        model_state_dict = extract_model_state_dict(checkpoint_payload)
+        model.load_state_dict(model_state_dict)
+        if isinstance(checkpoint_payload, dict):
+            optimizer_state = checkpoint_payload.get("optimizer_state_dict")
+            if optimizer_state is not None:
+                optimizer.load_state_dict(optimizer_state)
+            start_epoch = int(checkpoint_payload.get("epoch", 0)) + 1
+            history = list(checkpoint_payload.get("history", []))
+        print(f"Resuming from {args.resume_from} at epoch {start_epoch}.")
 
     config = vars(args).copy()
     config["allowed_tokens"] = allowed_tokens
@@ -448,7 +477,7 @@ def main() -> None:
         },
     )
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(start_epoch, args.epochs + 1):
         model.train()
         train_losses = []
         for batch in tqdm(train_loader, desc=f"epoch {epoch}/{args.epochs}"):
@@ -530,7 +559,14 @@ def main() -> None:
         }
 
     save_json(os.path.join(args.output_dir, "metrics_history.json"), history)
-    torch.save(model.state_dict(), os.path.join(args.output_dir, "last_model.pt"))
+    checkpoint = {
+        "epoch": final_payload["epoch"],
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "history": history,
+        "config": config,
+    }
+    torch.save(checkpoint, os.path.join(args.output_dir, "last_model.pt"))
     save_json(
         os.path.join(args.output_dir, "last_eval.json"),
         {

@@ -15,7 +15,7 @@
 * logit probe 分析
 * 第二阶段 periodicity analysis
 
-为了方便使用，所有评测逻辑现在统一整理在目录 [evaluation](/home/zzy/periodicity_generalization/evaluation:1) 下，并通过统一入口脚本 [run_serialized_sin_evaluations.py](/home/zzy/periodicity_generalization/run_serialized_sin_evaluations.py:1) 调用。
+为了方便使用，所有评测逻辑现在统一整理在目录 [evaluation](/home/zzy/periodicity_generalization/evaluation:1) 下，并通过统一入口脚本 [evaluation/run_serialized_sin_evaluations.py](/home/zzy/periodicity_generalization/evaluation/run_serialized_sin_evaluations.py:1) 调用。
 
 ## 2. 任务定义
 
@@ -222,7 +222,7 @@ python appendix_h_fanformer_sin.py \
 * `metrics_history.json`
   每次评估时记录的完整指标历史
 * `last_model.pt`
-  最后一个 epoch 的模型权重
+  最后一个 epoch 的完整 checkpoint
 * `last_eval.json`
   最后一个 epoch 的 ID/OOD 评估结果摘要
 * `prediction_curve.png`
@@ -234,7 +234,44 @@ python appendix_h_fanformer_sin.py \
 * `mse_curve.png`
   数值 MSE 曲线
 
-### 7.4 训练输出图像解释
+`last_model.pt` 当前保存的是完整 checkpoint，而不是单独的纯模型权重。其内部通常包含：
+
+* `epoch`
+* `model_state_dict`
+* `optimizer_state_dict`
+* `history`
+* `config`
+
+这样可以直接用于恢复训练。
+
+### 7.4 断点继续训练
+
+训练脚本支持：
+
+* `--resume_from`
+
+示例：
+
+```bash
+python appendix_h_fanformer_sin.py \
+  --output_dir ./outputs/resume_run \
+  --resume_from /path/to/old_run/last_model.pt \
+  --epochs 200
+```
+
+含义是：
+
+* 从已有 checkpoint 恢复模型参数
+* 如果 checkpoint 中包含 `optimizer_state_dict`，则一并恢复优化器状态
+* 从 `checkpoint["epoch"] + 1` 继续训练
+* 一直训练到你指定的 `--epochs`
+
+当前实现下：
+
+* 正常新训练时，`output_dir` 会自动追加时间戳
+* 如果使用 `--resume_from`，则不会自动追加时间戳，直接使用你传入的 `output_dir`
+
+### 7.5 训练输出图像解释
 
 `prediction_curve.png`
 
@@ -267,7 +304,7 @@ python appendix_h_fanformer_sin.py \
 
 ## 8. 统一评测入口
 
-统一入口脚本是 [run_serialized_sin_evaluations.py](/home/zzy/periodicity_generalization/run_serialized_sin_evaluations.py:1)。
+统一入口脚本是 [evaluation/run_serialized_sin_evaluations.py](/home/zzy/periodicity_generalization/evaluation/run_serialized_sin_evaluations.py:1)。
 
 它现在有两种模式：
 
@@ -278,6 +315,13 @@ python appendix_h_fanformer_sin.py \
 
 所有输出都会放进你指定的目录名后自动追加时间戳的新目录中。
 
+评测脚本现在兼容两种权重文件格式：
+
+* 旧格式：`last_model.pt` 直接是纯 `state_dict`
+* 新格式：`last_model.pt` 是包含 `model_state_dict` 的完整 checkpoint
+
+也就是说，旧实验目录仍然可以评测，新实验目录也可以直接评测。
+
 ## 9. 单实验评测模式
 
 ### 9.1 使用方法
@@ -285,7 +329,7 @@ python appendix_h_fanformer_sin.py \
 最常见的用法：
 
 ```bash
-python run_serialized_sin_evaluations.py \
+python evaluation/run_serialized_sin_evaluations.py \
   --checkpoint_dir /home/zzy/periodicity_generalization/outputs/Tr_expand12_500_04-28_11-36-35 \
   --output_dir ./outputs/Tr_expand12_eval
 ```
@@ -293,7 +337,7 @@ python run_serialized_sin_evaluations.py \
 带 logit probe 和更细分析的例子：
 
 ```bash
-python run_serialized_sin_evaluations.py \
+python evaluation/run_serialized_sin_evaluations.py \
   --checkpoint_dir /home/zzy/periodicity_generalization/outputs/Tr_expand12_500_04-28_11-36-35 \
   --output_dir ./outputs/Tr_expand12_eval \
   --id_test_size 2000 \
@@ -513,7 +557,7 @@ python run_serialized_sin_evaluations.py \
 最推荐的用法是直接传两个训练输出目录：
 
 ```bash
-python run_serialized_sin_evaluations.py \
+python evaluation/run_serialized_sin_evaluations.py \
   --mode compare \
   --run_a outputs/exp_a \
   --run_b outputs/exp_b \
@@ -523,7 +567,7 @@ python run_serialized_sin_evaluations.py \
 也支持直接传两份 `metrics_history.json`：
 
 ```bash
-python run_serialized_sin_evaluations.py \
+python evaluation/run_serialized_sin_evaluations.py \
   --mode compare \
   --metrics_a /path/to/exp_a/metrics_history.json \
   --metrics_b /path/to/exp_b/metrics_history.json \
@@ -610,30 +654,237 @@ python run_serialized_sin_evaluations.py \
 
 用于比较两次实验在累积 gap 上的比例关系。
 
-## 11. 旧脚本兼容说明
+## 11. 各评测脚本说明
 
-根目录保留了以下脚本名：
+当前所有评测脚本都位于 [evaluation](/home/zzy/periodicity_generalization/evaluation:1) 目录下。下面按脚本逐个说明其使用方式、主要输入与输出。
 
-* `evaluate_serialized_sin_model.py`
-* `analyze_periodicity_generalization.py`
-* `plot_logit_probe.py`
-* `compare_metrics_history.py`
-* `compare_ood_id_gap_integral.py`
-* `run_serialized_sin_evaluations.py`
+### 11.1 `evaluation/run_serialized_sin_evaluations.py`
 
-但这些脚本现在主要是 wrapper，真实实现都位于 [evaluation](/home/zzy/periodicity_generalization/evaluation:1)。
+统一入口，推荐优先使用。
 
-也就是说：
+作用：
 
-* 旧命令通常仍可运行
-* 新开发与维护应以 `evaluation/` 下的文件为准
+* `single` 模式下对单个训练结果做完整评测
+* `compare` 模式下对两个训练结果做对比分析
+
+单实验示例：
+
+```bash
+python evaluation/run_serialized_sin_evaluations.py \
+  --checkpoint_dir /path/to/train_output_dir \
+  --output_dir ./outputs/my_eval
+```
+
+双实验示例：
+
+```bash
+python evaluation/run_serialized_sin_evaluations.py \
+  --mode compare \
+  --run_a /path/to/exp_a \
+  --run_b /path/to/exp_b \
+  --output_dir ./outputs/my_compare
+```
+
+输出：
+
+* 单实验模式：
+  * `basic_eval/`
+  * `logit_probe/`（如果启用）
+  * `periodicity_analysis/`
+  * `evaluation_suite_config.json`
+  * `evaluation_suite_summary.json`
+* 双实验模式：
+  * `metrics_history_compare/`
+  * `ood_id_gap_integral_compare/`
+  * `compare_suite_config.json`
+  * `compare_suite_summary.json`
+
+### 11.2 `evaluation/evaluate_serialized_sin_model.py`
+
+基础评测脚本。
+
+作用：
+
+* 加载训练好的 checkpoint
+* 重新生成指定区间的 ID / OOD 测试集
+* 输出预测曲线、交叉熵柱状图、MSE 柱状图
+* 可选输出 `logit_probe.jsonl`
+
+示例：
+
+```bash
+python evaluation/evaluate_serialized_sin_model.py \
+  --checkpoint_dir /path/to/train_output_dir \
+  --output_dir ./outputs/basic_eval \
+  --id_test_size 2000 \
+  --ood_test_size 2000 \
+  --id_left -9.42477796076938 \
+  --id_right 9.42477796076938 \
+  --ood_left -18.84955592153876 \
+  --ood_right 18.84955592153876
+```
+
+如果要做 logit probe：
+
+```bash
+python evaluation/evaluate_serialized_sin_model.py \
+  --checkpoint_dir /path/to/train_output_dir \
+  --output_dir ./outputs/basic_eval \
+  --id_test_size 2000 \
+  --ood_test_size 2000 \
+  --id_left -9.42477796076938 \
+  --id_right 9.42477796076938 \
+  --ood_left -18.84955592153876 \
+  --ood_right 18.84955592153876 \
+  --logit_probe_left -1.0 \
+  --logit_probe_right 1.0 \
+  --logit_probe_step 0.1
+```
+
+输出：
+
+* `prediction_curve.png`
+* `cross_entropy_loss_curve.png`
+* `mse_curve.png`
+* `last_eval.json`
+* `evaluation_config.json`
+* `logit_probe.jsonl`（如果启用 probe）
+
+### 11.3 `evaluation/plot_logit_probe.py`
+
+单独把 `logit_probe.jsonl` 画成图。
+
+作用：
+
+* 从 probe 结果中画出：
+  * 真值
+  * 预测值
+  * `+` 的 logit
+  * `-` 的 logit
+
+示例：
+
+```bash
+python evaluation/plot_logit_probe.py \
+  --logit_probe_path /path/to/logit_probe.jsonl \
+  --output_path ./outputs/logit_probe_plot.png
+```
+
+输出：
+
+* `logit_probe_plot.png`
+
+### 11.4 `evaluation/analyze_periodicity_generalization.py`
+
+第二阶段 periodicity analysis 脚本。
+
+作用：
+
+* 分区间 OOD 误差分析
+* 周期一致性分析
+* 半周期关系分析
+* shift matching
+* 局部正弦拟合
+
+示例：
+
+```bash
+python evaluation/analyze_periodicity_generalization.py \
+  --checkpoint_dir /path/to/train_output_dir \
+  --output_dir ./outputs/periodicity_analysis \
+  --id_left -9.42477796076938 \
+  --id_right 9.42477796076938 \
+  --ood_left -18.84955592153876 \
+  --ood_right 18.84955592153876 \
+  --interval_width 3.141592653589793 \
+  --points_per_interval 256 \
+  --phase_points 256 \
+  --max_k 6 \
+  --shift_multiples 1,2,3,4 \
+  --full_curve_points 4096
+```
+
+输出：
+
+* `analysis_summary.json`
+* `full_prediction_preview.json`
+* `full_prediction_curve.png`
+* `partition_mae.png`
+* `partition_gap.png`
+* `period_consistency.png`
+* `half_period_metrics.png`
+* `shift_matching_plus.png`
+* `shift_matching_minus.png`
+* `local_sine_fit_params.png`
+
+### 11.5 `evaluation/compare_metrics_history.py`
+
+训练历史对比脚本。
+
+作用：
+
+* 按 `train_loss` 对齐比较两次实验的 `id_loss` / `ood_loss`
+* 按 `id_loss` 对齐比较两次实验的 `train_loss` / `ood_loss`
+
+示例：
+
+```bash
+python evaluation/compare_metrics_history.py \
+  --metrics_a /path/to/exp_a/metrics_history.json \
+  --metrics_b /path/to/exp_b/metrics_history.json \
+  --label_a exp_a \
+  --label_b exp_b \
+  --output_path ./outputs/train_aligned.png \
+  --id_aligned_output_path ./outputs/id_aligned.png
+```
+
+输出：
+
+* `train_aligned.png`
+* `id_aligned.png`
+
+### 11.6 `evaluation/compare_ood_id_gap_integral.py`
+
+OOD-ID gap 积分对比脚本。
+
+作用：
+
+* 读取两次训练的 `metrics_history.json`
+* 计算：
+  * `g(epoch) = ood_loss - id_loss`
+* 按 epoch 对 `g(epoch)` 做累计梯形积分
+* 输出：
+  * 两次实验的积分曲线
+  * 两者差值曲线
+  * 两者比值曲线
+
+示例：
+
+```bash
+python evaluation/compare_ood_id_gap_integral.py \
+  --metrics_a /path/to/exp_a/metrics_history.json \
+  --metrics_b /path/to/exp_b/metrics_history.json \
+  --label_a exp_a \
+  --label_b exp_b \
+  --integral_output_path ./outputs/integral_curves.png \
+  --difference_output_path ./outputs/difference_curve.png \
+  --ratio_output_path ./outputs/ratio_curve.png \
+  --summary_output_path ./outputs/integral_summary.json
+```
+
+输出：
+
+* `integral_curves.png`
+* `difference_curve.png`
+* `ratio_curve.png`
+* `integral_summary.json`
 
 ## 12. 推荐使用方式
 
 如果你只是要做一个训练结果的完整分析，推荐直接：
 
 ```bash
-python run_serialized_sin_evaluations.py \
+python evaluation/run_serialized_sin_evaluations.py \
   --checkpoint_dir /path/to/train_output_dir \
   --output_dir ./outputs/my_eval
 ```
@@ -641,7 +892,7 @@ python run_serialized_sin_evaluations.py \
 如果你要比较两个训练实验，推荐直接：
 
 ```bash
-python run_serialized_sin_evaluations.py \
+python evaluation/run_serialized_sin_evaluations.py \
   --mode compare \
   --run_a /path/to/exp_a \
   --run_b /path/to/exp_b \

@@ -16,6 +16,8 @@ from appendix_h_fanformer_sin import (
     collate_batch,
     decode_predictions,
     evaluate,
+    extract_model_state_dict,
+    load_checkpoint_payload,
     load_tokenizer,
     plot_predictions,
     safe_float,
@@ -185,8 +187,8 @@ def main() -> None:
         causal=train_config.get("causal", False),
     ).to(args.device)
 
-    state_dict = torch.load(model_path, map_location=args.device)
-    model.load_state_dict(state_dict)
+    payload = load_checkpoint_payload(model_path, map_location=args.device)
+    model.load_state_dict(extract_model_state_dict(payload))
     model.eval()
 
     criterion = torch.nn.CrossEntropyLoss(ignore_index=-100)

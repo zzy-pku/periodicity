@@ -17,6 +17,8 @@ from appendix_h_fanformer_sin import (
     build_samples,
     collate_batch,
     decode_predictions,
+    extract_model_state_dict,
+    load_checkpoint_payload,
     load_tokenizer,
     safe_float,
     set_seed,
@@ -78,11 +80,8 @@ def load_model_bundle(model_path: str, config_path: str, batch_size_override: in
         causal=train_config.get("causal", False),
     ).to(device)
 
-    try:
-        state_dict = torch.load(model_path, map_location=device, weights_only=True)
-    except TypeError:
-        state_dict = torch.load(model_path, map_location=device)
-    model.load_state_dict(state_dict)
+    payload = load_checkpoint_payload(model_path, map_location=device)
+    model.load_state_dict(extract_model_state_dict(payload))
     model.eval()
 
     return (
