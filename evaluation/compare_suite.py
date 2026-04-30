@@ -1,14 +1,22 @@
 import argparse
 import json
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
+
+if __package__ is None or __package__ == "":
+    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from evaluation.compare_metrics_history import (
     extract_series,
     load_metrics as load_metrics_history,
     plot_comparison,
     plot_id_aligned_comparison,
+)
+from evaluation.compare_metrics_history_by_epoch import (
+    extract_series as extract_epoch_series,
+    plot_epoch_aligned_comparison,
 )
 from evaluation.compare_ood_id_gap_integral import (
     cumulative_trapezoid,
@@ -56,6 +64,8 @@ def run_compare_mode(args) -> str:
     history_b = load_metrics_history(metrics_b)
     train_a, id_a, ood_a = extract_series(history_a)
     train_b, id_b, ood_b = extract_series(history_b)
+    epochs_a, _, _, _ = extract_epoch_series(history_a)
+    epochs_b, _, _, _ = extract_epoch_series(history_b)
 
     metrics_compare_dir = os.path.join(output_dir, "metrics_history_compare")
     integral_compare_dir = os.path.join(output_dir, "ood_id_gap_integral_compare")
@@ -64,21 +74,35 @@ def run_compare_mode(args) -> str:
 
     train_aligned_path = os.path.join(metrics_compare_dir, "train_aligned.png")
     id_aligned_path = os.path.join(metrics_compare_dir, "id_aligned.png")
+    epoch_aligned_path = os.path.join(metrics_compare_dir, "epoch_aligned.png")
     plot_comparison(train_a, id_a, ood_a, label_a, train_b, id_b, ood_b, label_b, train_aligned_path)
     plot_id_aligned_comparison(train_a, id_a, ood_a, label_a, train_b, id_b, ood_b, label_b, id_aligned_path)
+    plot_epoch_aligned_comparison(
+        epochs_a,
+        train_a,
+        id_a,
+        ood_a,
+        label_a,
+        epochs_b,
+        train_b,
+        id_b,
+        ood_b,
+        label_b,
+        epoch_aligned_path,
+    )
 
-    epochs_a, gaps_a = extract_gap_series(history_a)
-    epochs_b, gaps_b = extract_gap_series(history_b)
-    integral_a = cumulative_trapezoid(epochs_a, gaps_a)
-    integral_b = cumulative_trapezoid(epochs_b, gaps_b)
-    common_epochs, interp_a, interp_b = interpolate_to_common_grid(epochs_a, integral_a, epochs_b, integral_b)
+    gap_epochs_a, gaps_a = extract_gap_series(history_a)
+    gap_epochs_b, gaps_b = extract_gap_series(history_b)
+    integral_a = cumulative_trapezoid(gap_epochs_a, gaps_a)
+    integral_b = cumulative_trapezoid(gap_epochs_b, gaps_b)
+    common_epochs, interp_a, interp_b = interpolate_to_common_grid(gap_epochs_a, integral_a, gap_epochs_b, integral_b)
     diff_curve = interp_a - interp_b
     ratio_curve = interp_a / (interp_b + 1e-12)
 
     integral_curves_path = os.path.join(integral_compare_dir, "integral_curves.png")
     difference_path = os.path.join(integral_compare_dir, "difference_curve.png")
     ratio_path = os.path.join(integral_compare_dir, "ratio_curve.png")
-    plot_cumulative_curves(epochs_a, integral_a, label_a, epochs_b, integral_b, label_b, integral_curves_path)
+    plot_cumulative_curves(gap_epochs_a, integral_a, label_a, gap_epochs_b, integral_b, label_b, integral_curves_path)
     plot_difference_curve(common_epochs, diff_curve, difference_path)
     plot_ratio_curve(common_epochs, ratio_curve, ratio_path)
 
@@ -99,6 +123,7 @@ def run_compare_mode(args) -> str:
             "metrics_history_compare": {
                 "train_aligned_path": train_aligned_path,
                 "id_aligned_path": id_aligned_path,
+                "epoch_aligned_path": epoch_aligned_path,
             },
             "ood_id_gap_integral_compare": {
                 "integral_curves_path": integral_curves_path,

@@ -591,6 +591,7 @@ python evaluation/run_serialized_sin_evaluations.py \
 
 * `train_aligned.png`
 * `id_aligned.png`
+* `epoch_aligned.png`
 
 `train_aligned.png`
 
@@ -617,6 +618,21 @@ python evaluation/run_serialized_sin_evaluations.py \
 * 当两次实验达到相同 ID 水平时
 * 哪个实验训练更容易
 * 哪个实验 OOD 更好
+
+`epoch_aligned.png`
+
+包含 3 个子图：
+
+* `Train Loss`
+* `ID Loss`
+* `OOD Loss`
+
+三张子图都以 `epoch` 为横轴，同时画出两次实验的曲线。  
+它适合最直接地看：
+
+* 两次实验在训练过程中 loss 怎么随 epoch 演化
+* 哪个实验下降更快
+* 哪个实验更早进入过拟合或 OOD 崩坏
 
 ### 10.4 `ood_id_gap_integral_compare/` 输出说明
 
@@ -843,7 +859,35 @@ python evaluation/compare_metrics_history.py \
 * `train_aligned.png`
 * `id_aligned.png`
 
-### 11.6 `evaluation/compare_ood_id_gap_integral.py`
+### 11.6 `evaluation/compare_metrics_history_by_epoch.py`
+
+按 `epoch` 直接对齐的训练历史对比脚本。
+
+作用：
+
+* 读取两份 `metrics_history.json`
+* 按 `epoch` 直接对齐
+* 在一张图中画出两次实验的：
+  * `Train Loss`
+  * `ID Loss`
+  * `OOD Loss`
+
+示例：
+
+```bash
+python evaluation/compare_metrics_history_by_epoch.py \
+  --metrics_a /path/to/exp_a/metrics_history.json \
+  --metrics_b /path/to/exp_b/metrics_history.json \
+  --label_a exp_a \
+  --label_b exp_b \
+  --output_path ./outputs/epoch_aligned.png
+```
+
+输出：
+
+* `epoch_aligned.png`
+
+### 11.7 `evaluation/compare_ood_id_gap_integral.py`
 
 OOD-ID gap 积分对比脚本。
 
