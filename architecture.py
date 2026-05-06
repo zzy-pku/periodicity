@@ -328,9 +328,11 @@ class FFTLayer(nn.Module):
 ##################################################################################
 
 class FANformerLayer(nn.Module):
-    def __init__(self, hidden_dim, num_heads, norm_first=True, dropout=0.1):
+    def __init__(self, hidden_dim, num_heads, norm_first=True, dropout=0.1, attn_norm_first=None, ff_norm_first=None):
         super().__init__()
         self.norm_first = norm_first
+        self.attn_norm_first = norm_first if attn_norm_first is None else attn_norm_first
+        self.ff_norm_first = norm_first if ff_norm_first is None else ff_norm_first
         self.attn_norm = nn.LayerNorm(hidden_dim)
 
         # self.fft_layer = FFTLayer(hidden_dim, hidden_dim)
@@ -350,7 +352,7 @@ class FANformerLayer(nn.Module):
 
     def forward(self, x, attn_mask=None):
         # prenorm
-        h = self.attn_norm(x) if self.norm_first else x
+        h = self.attn_norm(x) if self.attn_norm_first else x
         # h = x
 
         # FANLayer
@@ -363,7 +365,7 @@ class FANformerLayer(nn.Module):
         x = x + self.dropout1(attn_out)
 
         # FFN
-        h2 = self.ff_norm(x) if self.norm_first else x
+        h2 = self.ff_norm(x) if self.ff_norm_first else x
         # h2 = x
         ff_out = self.ff(h2)
         x = x + self.dropout2(ff_out)
@@ -373,14 +375,14 @@ class FANformerLayer(nn.Module):
 @register_model('FANformer')
 class FANformerModel(nn.Module):
     def __init__(self, input_dim=1, output_dim=1, hidden_dim=768, num_layers=12,
-                 num_heads=12, norm_first=True, dropout=0.1):
+                 num_heads=12, norm_first=True, dropout=0.1, attn_norm_first=None, ff_norm_first=None):
         super().__init__()
         self.embedding = nn.Linear(input_dim, hidden_dim)
         self.pos_encoder = RoPEPositionalEncoding(hidden_dim)
 
         # FANformer 层
         self.layers = nn.ModuleList([
-            FANformerLayer(hidden_dim, num_heads, norm_first, dropout)
+            FANformerLayer(hidden_dim, num_heads, norm_first, dropout, attn_norm_first, ff_norm_first)
             for _ in range(num_layers)
         ])
 
@@ -399,6 +401,7 @@ class FANformerModel(nn.Module):
 class Qwen_FANformerModel(nn.Module):
     def __init__(self, pretrained_name="/home/gtxygyzb/models/Qwen/Qwen2.5-0.5B", output_dim=1,
                  num_layers=5, num_heads=12, norm_first=True, dropout=0.1,
+                 attn_norm_first=None, ff_norm_first=None,
                  freeze_emb=True, causal=True):
         super().__init__()
         # 加载预训练模型
@@ -419,7 +422,7 @@ class Qwen_FANformerModel(nn.Module):
         self.pos_encoder = RoPEPositionalEncoding(self.hidden_dim)
         # FANformer 层
         self.layers = nn.ModuleList([
-            FANformerLayer(self.hidden_dim, num_heads, norm_first, dropout)
+            FANformerLayer(self.hidden_dim, num_heads, norm_first, dropout, attn_norm_first, ff_norm_first)
             for _ in range(num_layers)
         ])
 
@@ -453,9 +456,11 @@ class Qwen_FANformerModel(nn.Module):
 
 
 class TransformerLayer(nn.Module):
-    def __init__(self, hidden_dim, num_heads, norm_first=True, dropout=0.1):
+    def __init__(self, hidden_dim, num_heads, norm_first=True, dropout=0.1, attn_norm_first=None, ff_norm_first=None):
         super().__init__()
         self.norm_first = norm_first
+        self.attn_norm_first = norm_first if attn_norm_first is None else attn_norm_first
+        self.ff_norm_first = norm_first if ff_norm_first is None else ff_norm_first
 
         self.attn_norm = nn.LayerNorm(hidden_dim)
         self.attn = nn.MultiheadAttention(embed_dim=hidden_dim, num_heads=num_heads, dropout=dropout)
@@ -472,7 +477,7 @@ class TransformerLayer(nn.Module):
 
     def forward(self, x, attn_mask=None):
         # prenorm
-        h = self.attn_norm(x) if self.norm_first else x
+        h = self.attn_norm(x) if self.attn_norm_first else x
         # h = x
 
         # MultiheadAttention
@@ -480,7 +485,7 @@ class TransformerLayer(nn.Module):
         x = x + self.dropout1(attn_out)
 
         # FFN
-        h2 = self.ff_norm(x) if self.norm_first else x
+        h2 = self.ff_norm(x) if self.ff_norm_first else x
         # h2 = x
         ff_out = self.ff(h2)
         x = x + self.dropout2(ff_out)
@@ -490,6 +495,7 @@ class TransformerLayer(nn.Module):
 class Qwen_Transformer(nn.Module):
     def __init__(self, pretrained_name="/home/gtxygyzb/models/Qwen/Qwen2.5-0.5B", output_dim=1,
                  num_layers=5, num_heads=12, norm_first=True, dropout=0.1,
+                 attn_norm_first=None, ff_norm_first=None,
                  freeze_emb=True, causal=True):
         super().__init__()
         # 加载预训练模型
@@ -510,7 +516,7 @@ class Qwen_Transformer(nn.Module):
         self.pos_encoder = RoPEPositionalEncoding(self.hidden_dim)
         # Transformer 层
         self.layers = nn.ModuleList([
-            TransformerLayer(self.hidden_dim, num_heads, norm_first, dropout)
+            TransformerLayer(self.hidden_dim, num_heads, norm_first, dropout, attn_norm_first, ff_norm_first)
             for _ in range(num_layers)
         ])
 

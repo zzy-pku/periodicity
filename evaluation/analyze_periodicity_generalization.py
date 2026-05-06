@@ -76,6 +76,8 @@ def load_model_bundle(model_path: str, config_path: str, batch_size_override: in
         num_layers=train_config["layers"],
         num_heads=train_config["num_heads"],
         norm_first=train_config.get("norm_first", True),
+        attn_norm_first=train_config.get("attn_norm_first"),
+        ff_norm_first=train_config.get("ff_norm_first"),
         freeze_emb=True,
         causal=train_config.get("causal", False),
     ).to(device)

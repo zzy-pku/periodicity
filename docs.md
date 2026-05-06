@@ -193,7 +193,11 @@ python appendix_h_fanformer_sin.py \
 * `--num_heads`
   注意力头数
 * `--norm_first`
-  是否使用 pre-norm
+  两处 normalize 的默认值
+* `--attn_norm_first`
+  是否在 attention 前使用 normalize；若不传，则回退到 `--norm_first`
+* `--ff_norm_first`
+  是否在 feedforward 前使用 normalize；若不传，则回退到 `--norm_first`
 * `--train_size`
   训练样本数
 * `--id_test_size`
@@ -211,7 +215,67 @@ python appendix_h_fanformer_sin.py \
 * `--ood_left`, `--ood_right`
   OOD 区间边界
 
-### 7.3 训练输出目录说明
+### 7.3 Normalize 参数说明
+
+当前训练代码里，block 中有两处可独立控制的 normalize：
+
+* attention 前的 normalize
+* feedforward 前的 normalize
+
+为了兼容旧实验，仍然保留了：
+
+* `--norm_first`
+
+它现在表示：
+
+* 两处 normalize 的默认值
+
+同时新增了两个更细粒度参数：
+
+* `--attn_norm_first`
+* `--ff_norm_first`
+
+优先级规则如下：
+
+* 如果不传 `--attn_norm_first` 和 `--ff_norm_first`
+  * 两处都使用 `--norm_first`
+* 如果只传其中一个
+  * 该位置使用你显式指定的值
+  * 另一处仍回退到 `--norm_first`
+* 如果两个都传
+  * 完全按这两个参数分别控制
+
+典型示例：
+
+两处都使用 pre-norm：
+
+```bash
+python appendix_h_fanformer_sin.py \
+  --output_dir ./outputs/run_norm_both_true \
+  --norm_first true
+```
+
+attention 前用 pre-norm，FFN 前不用：
+
+```bash
+python appendix_h_fanformer_sin.py \
+  --output_dir ./outputs/run_attn_true_ff_false \
+  --norm_first true \
+  --attn_norm_first true \
+  --ff_norm_first false
+```
+
+attention 前不用，FFN 前用：
+
+```bash
+python appendix_h_fanformer_sin.py \
+  --output_dir ./outputs/run_attn_false_ff_true \
+  --norm_first false \
+  --attn_norm_first false \
+  --ff_norm_first true
+```
+
+### 7.4 训练输出目录说明
 
 训练完成后，目录中通常会包含：
 
@@ -244,7 +308,7 @@ python appendix_h_fanformer_sin.py \
 
 这样可以直接用于恢复训练。
 
-### 7.4 断点继续训练
+### 7.5 断点继续训练
 
 训练脚本支持：
 
@@ -271,7 +335,7 @@ python appendix_h_fanformer_sin.py \
 * 正常新训练时，`output_dir` 会自动追加时间戳
 * 如果使用 `--resume_from`，则不会自动追加时间戳，直接使用你传入的 `output_dir`
 
-### 7.5 训练输出图像解释
+### 7.6 训练输出图像解释
 
 `prediction_curve.png`
 

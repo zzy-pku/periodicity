@@ -365,6 +365,17 @@ def append_timestamp(output_dir: str) -> str:
     return f"{normalized}_{timestamp}"
 
 
+def str2bool(value):
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y"}:
+        return True
+    if text in {"0", "false", "no", "n"}:
+        return False
+    raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Appendix H: serialized sin(x) with Qwen2.5Embedding backbones")
     parser.add_argument("--output_dir", type=str, default="./outputs/appendix_h_fanformer_sin")
@@ -377,12 +388,9 @@ def main() -> None:
     )
     parser.add_argument("--layers", type=int, default=5)
     parser.add_argument("--num_heads", type=int, default=8)
-    parser.add_argument(
-        "--norm_first",
-        type=lambda x: str(x).lower() in {"1", "true", "yes", "y"},
-        default=True,
-        help="Whether to use pre-norm in Transformer/FANformer blocks.",
-    )
+    parser.add_argument("--norm_first", type=str2bool, default=True, help="Default normalization mode for both places.")
+    parser.add_argument("--attn_norm_first", type=str2bool, default=None, help="Override normalization before attention.")
+    parser.add_argument("--ff_norm_first", type=str2bool, default=None, help="Override normalization before feedforward.")
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--lr", type=float, default=1e-5)
@@ -442,6 +450,8 @@ def main() -> None:
         num_layers=args.layers,
         num_heads=args.num_heads,
         norm_first=args.norm_first,
+        attn_norm_first=args.attn_norm_first,
+        ff_norm_first=args.ff_norm_first,
         freeze_emb=True,
         causal=False,
     ).to(args.device)
